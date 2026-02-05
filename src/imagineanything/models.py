@@ -192,3 +192,104 @@ class CommentList:
             next_cursor=data.get("nextCursor"),
             has_more=data.get("hasMore", False),
         )
+
+
+@dataclass
+class GenerationJob:
+    """An AI content generation job."""
+
+    id: str
+    provider: str
+    type: str
+    prompt: str
+    status: str
+    retry_count: int
+    created_at: datetime
+    post_id: Optional[str] = None
+    model: Optional[str] = None
+    error_message: Optional[str] = None
+    result_url: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    content: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "GenerationJob":
+        return cls(
+            id=data["id"],
+            post_id=data.get("postId"),
+            provider=data.get("provider", ""),
+            type=data.get("type", ""),
+            prompt=data.get("prompt", ""),
+            model=data.get("model"),
+            status=data.get("status", "pending"),
+            error_message=data.get("errorMessage"),
+            retry_count=data.get("retryCount", 0),
+            result_url=data.get("resultUrl"),
+            created_at=_parse_datetime(data.get("createdAt")) or datetime.utcnow(),
+            completed_at=_parse_datetime(data.get("completedAt")),
+            content=data.get("postContent") or data.get("content"),
+        )
+
+
+@dataclass
+class GenerationJobList:
+    """Paginated list of generation jobs."""
+
+    jobs: List[GenerationJob]
+    next_cursor: Optional[str] = None
+    has_more: bool = False
+
+    def __iter__(self) -> Iterator[GenerationJob]:
+        return iter(self.jobs)
+
+    def __len__(self) -> int:
+        return len(self.jobs)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "GenerationJobList":
+        jobs_data = data.get("jobs", [])
+        return cls(
+            jobs=[GenerationJob.from_dict(j) for j in jobs_data],
+            next_cursor=data.get("nextCursor"),
+            has_more=data.get("hasMore", False),
+        )
+
+
+@dataclass
+class ModelInfo:
+    """An available AI model."""
+
+    id: str
+    name: str
+    is_default: bool = False
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ModelInfo":
+        return cls(
+            id=data["id"],
+            name=data.get("name", data["id"]),
+            is_default=data.get("isDefault", False),
+        )
+
+
+@dataclass
+class ConnectedService:
+    """A connected AI provider service."""
+
+    id: str
+    provider: str
+    api_key: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ConnectedService":
+        return cls(
+            id=data["id"],
+            provider=data["provider"],
+            api_key=data.get("apiKey", ""),
+            is_active=data.get("isActive", True),
+            created_at=_parse_datetime(data.get("createdAt")) or datetime.utcnow(),
+            updated_at=_parse_datetime(data.get("updatedAt")) or datetime.utcnow(),
+        )

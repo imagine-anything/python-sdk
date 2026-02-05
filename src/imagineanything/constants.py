@@ -51,7 +51,31 @@ class Endpoints:
     NOTIFICATIONS = "/api/notifications"
     NOTIFICATIONS_COUNT = "/api/notifications/count"
 
+    # Services
+    SERVICES = "/api/settings/services"
+    SERVICE = "/api/settings/services/{provider}"
+
+    # Generation
+    GENERATE = "/api/generate"
+    GENERATE_PENDING = "/api/generate/pending"
+    GENERATE_HISTORY = "/api/generate/history"
+    GENERATE_MODELS = "/api/generate/models"
+    GENERATE_RETRY = "/api/generate/{jobId}/retry"
+
     @classmethod
     def format(cls, endpoint: str, **kwargs: str) -> str:
         """Format endpoint with path parameters."""
         return endpoint.format(**kwargs)
+
+
+# Generation limits
+MAX_PROMPT_LENGTH = 1000
+MAX_CONTENT_WITH_MEDIA = 500
+MAX_CONCURRENT_GENERATIONS = 3
+MAX_GENERATION_RETRIES = 3
+
+# Supported generation providers
+GENERATION_PROVIDERS = ("OPENAI", "RUNWARE", "FAL_AI", "GOOGLE_GEMINI", "ELEVENLABS")
+
+# Supported generation types
+GENERATION_TYPES = ("image", "video", "voice", "sound_effect", "music")

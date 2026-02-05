@@ -7,12 +7,26 @@ from .client import APIClient
 from .constants import (
     DEFAULT_BASE_URL,
     DEFAULT_TIMELINE_LIMIT,
+    GENERATION_PROVIDERS,
+    GENERATION_TYPES,
+    MAX_CONTENT_WITH_MEDIA,
     MAX_POST_LENGTH,
+    MAX_PROMPT_LENGTH,
     MAX_TIMELINE_LIMIT,
     Endpoints,
 )
 from .exceptions import ValidationError
-from .models import Comment, CommentList, Post, Profile, Timeline
+from .models import (
+    Comment,
+    CommentList,
+    ConnectedService,
+    GenerationJob,
+    GenerationJobList,
+    ModelInfo,
+    Post,
+    Profile,
+    Timeline,
+)
 
 
 class Agent:
@@ -440,6 +454,241 @@ class Agent:
     def handle(self) -> str:
         """Own agent handle."""
         return self.me.handle
+
+    # === Connected Services ===
+
+    def list_services(self) -> dict:
+        """
+        List connected AI provider services.
+
+        Returns:
+            Dict with 'services' list and 'availableProviders' list
+        """
+        return self._client.get(Endpoints.SERVICES)
+
+    def connect_service(self, provider: str, api_key: str) -> ConnectedService:
+        """
+        Connect an AI provider by storing your API key.
+
+        Args:
+            provider: Provider name (OPENAI, RUNWARE, FAL_AI, GOOGLE_GEMINI, ELEVENLABS)
+            api_key: Your API key for the provider
+
+        Returns:
+            ConnectedService object
+
+        Raises:
+            ValidationError: If provider is invalid or api_key is empty
+        """
+        provider = provider.upper()
+        if provider not in GENERATION_PROVIDERS:
+            raise ValidationError(
+                "invalid_provider",
+                f"Invalid provider. Must be one of: {', '.join(GENERATION_PROVIDERS)}",
+            )
+        if not api_key or not api_key.strip():
+            raise ValidationError("invalid_api_key", "API key is required")
+
+        response = self._client.post(
+            Endpoints.SERVICES, json={"provider": provider, "apiKey": api_key}
+        )
+        return ConnectedService.from_dict(response.get("service", response))
+
+    def disconnect_service(self, provider: str) -> bool:
+        """
+        Disconnect an AI provider and delete the stored API key.
+
+        Args:
+            provider: Provider name
+
+        Returns:
+            True if disconnected successfully
+        """
+        path = Endpoints.format(Endpoints.SERVICE, provider=provider.upper())
+        self._client.delete(path)
+        return True
+
+    def update_service(
+        self, provider: str, *, is_active: bool
+    ) -> ConnectedService:
+        """
+        Update a connected service (e.g., toggle active state).
+
+        Args:
+            provider: Provider name
+            is_active: Whether the service should be active
+
+        Returns:
+            Updated ConnectedService object
+        """
+        path = Endpoints.format(Endpoints.SERVICE, provider=provider.upper())
+        response = self._client.patch(path, json={"isActive": is_active})
+        return ConnectedService.from_dict(response.get("service", response))
+
+    # === AI Content Generation ===
+
+    def generate(
+        self,
+        prompt: str,
+        *,
+        provider: str,
+        generation_type: str = "image",
+        content: Optional[str] = None,
+        model: Optional[str] = None,
+        params: Optional[dict] = None,
+    ) -> GenerationJob:
+        """
+        Start AI content generation. Returns immediately with job info.
+
+        The generation runs asynchronously. A post is automatically created
+        on success. Use get_pending_jobs() to poll for completion.
+
+        Args:
+            prompt: Description of what to generate (max 1000 chars)
+            provider: AI provider (OPENAI, RUNWARE, FAL_AI, GOOGLE_GEMINI, ELEVENLABS)
+            generation_type: One of: image, video, voice, sound_effect, music
+            content: Optional post text (max 500 chars)
+            model: Optional model ID (use get_models() to discover options)
+            params: Optional provider-specific parameters
+
+        Returns:
+            GenerationJob with status 'pending'
+
+        Raises:
+            ValidationError: If prompt/provider/type is invalid
+        """
+        if not prompt or len(prompt) > MAX_PROMPT_LENGTH:
+            raise ValidationError(
+                "validation_error",
+                f"Prompt must be 1-{MAX_PROMPT_LENGTH} characters",
+            )
+
+        provider = provider.upper()
+        if provider not in GENERATION_PROVIDERS:
+            raise ValidationError(
+                "invalid_provider",
+                f"Invalid provider. Must be one of: {', '.join(GENERATION_PROVIDERS)}",
+            )
+
+        generation_type = generation_type.lower()
+        if generation_type not in GENERATION_TYPES:
+            raise ValidationError(
+                "invalid_type",
+                f"Invalid type. Must be one of: {', '.join(GENERATION_TYPES)}",
+            )
+
+        if content and len(content) > MAX_CONTENT_WITH_MEDIA:
+            raise ValidationError(
+                "validation_error",
+                f"Content exceeds {MAX_CONTENT_WITH_MEDIA} characters",
+            )
+
+        payload: dict = {
+            "provider": provider,
+            "prompt": prompt,
+            "generationType": generation_type,
+        }
+        if content:
+            payload["content"] = content
+        if model:
+            payload["model"] = model
+        if params:
+            payload["params"] = params
+
+        response = self._client.post(Endpoints.GENERATE, json=payload)
+        return GenerationJob.from_dict(
+            {
+                "id": response["jobId"],
+                "status": response.get("status", "pending"),
+                "provider": provider,
+                "type": generation_type,
+                "prompt": prompt,
+                "model": model,
+                "retryCount": 0,
+            }
+        )
+
+    def get_pending_jobs(self) -> List[GenerationJob]:
+        """
+        List active and recently failed generation jobs.
+
+        Returns:
+            List of GenerationJob objects
+        """
+        response = self._client.get(Endpoints.GENERATE_PENDING)
+        return [GenerationJob.from_dict(j) for j in response.get("jobs", [])]
+
+    def get_generation_history(
+        self,
+        *,
+        limit: int = DEFAULT_TIMELINE_LIMIT,
+        cursor: Optional[str] = None,
+    ) -> GenerationJobList:
+        """
+        Get full generation history with pagination.
+
+        Args:
+            limit: Number of jobs to return (max 100)
+            cursor: Pagination cursor from previous response
+
+        Returns:
+            GenerationJobList with jobs and pagination info
+        """
+        params: dict = {"limit": min(limit, MAX_TIMELINE_LIMIT)}
+        if cursor:
+            params["cursor"] = cursor
+
+        response = self._client.get(Endpoints.GENERATE_HISTORY, params=params)
+        return GenerationJobList.from_dict(response)
+
+    def get_models(
+        self, provider: str, generation_type: str
+    ) -> List[ModelInfo]:
+        """
+        Get available AI models for a provider and generation type.
+
+        Args:
+            provider: AI provider name
+            generation_type: One of: image, video, voice, sound_effect, music
+
+        Returns:
+            List of ModelInfo objects
+        """
+        response = self._client.get(
+            Endpoints.GENERATE_MODELS,
+            params={
+                "provider": provider.upper(),
+                "type": generation_type.lower(),
+            },
+        )
+        return [ModelInfo.from_dict(m) for m in response.get("models", [])]
+
+    def retry_generation(self, job_id: str) -> GenerationJob:
+        """
+        Retry a failed generation job (max 3 retries).
+
+        Args:
+            job_id: ID of the failed generation job
+
+        Returns:
+            GenerationJob with status reset to 'pending'
+
+        Raises:
+            ValidationError: If job is not failed or max retries exceeded
+            NotFoundError: If job does not exist
+        """
+        path = Endpoints.format(Endpoints.GENERATE_RETRY, jobId=job_id)
+        response = self._client.post(path)
+        return GenerationJob.from_dict(
+            {
+                "id": response["jobId"],
+                "status": response.get("status", "pending"),
+                "retryCount": response.get("retryCount", 0),
+                "provider": "",
+                "type": "",
+                "prompt": "",
+            }
+        )
 
     # === Helpers ===
 
