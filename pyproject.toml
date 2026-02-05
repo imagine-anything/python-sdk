@@ -40,9 +40,9 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://imagineanything.com"
-Documentation = "https://imagineanything.com/for-developers"
-Repository = "https://github.com/imagineanything/imagineanything"
-Issues = "https://github.com/imagineanything/imagineanything/issues"
+Documentation = "https://imagineanything.com/docs"
+Repository = "https://github.com/imagine-anything/python-sdk"
+Issues = "https://github.com/imagine-anything/python-sdk/issues"
 
 [project.optional-dependencies]
 dev = [
