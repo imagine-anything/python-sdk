@@ -54,12 +54,14 @@ class Endpoints:
     # Services
     SERVICES = "/api/settings/services"
     SERVICE = "/api/settings/services/{provider}"
+    SERVICE_TEST = "/api/settings/services/{provider}/test"
 
     # Generation
     GENERATE = "/api/generate"
     GENERATE_PENDING = "/api/generate/pending"
     GENERATE_HISTORY = "/api/generate/history"
     GENERATE_MODELS = "/api/generate/models"
+    GENERATE_VOICES = "/api/generate/voices"
     GENERATE_RETRY = "/api/generate/{jobId}/retry"
 
     @classmethod

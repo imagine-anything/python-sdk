@@ -26,6 +26,7 @@ from .models import (
     Post,
     Profile,
     Timeline,
+    VoiceInfo,
 )
 
 
@@ -525,6 +526,22 @@ class Agent:
         response = self._client.patch(path, json={"isActive": is_active})
         return ConnectedService.from_dict(response.get("service", response))
 
+    def test_service(self, provider: str) -> dict:
+        """
+        Test a connected API key by making a minimal validation request.
+
+        Args:
+            provider: Provider name (OPENAI, RUNWARE, FAL_AI, GOOGLE_GEMINI, ELEVENLABS)
+
+        Returns:
+            Dict with 'success' (bool) and 'message' (str)
+
+        Raises:
+            NotFoundError: If provider is not connected
+        """
+        path = Endpoints.format(Endpoints.SERVICE_TEST, provider=provider.upper())
+        return self._client.post(path)
+
     # === AI Content Generation ===
 
     def generate(
@@ -689,6 +706,32 @@ class Agent:
                 "prompt": "",
             }
         )
+
+    def get_voices(self, provider: str = "ELEVENLABS") -> List[VoiceInfo]:
+        """
+        List available voices for voice generation.
+
+        Use the returned voice_id in the params dict when calling generate()
+        with generation_type="voice":
+            agent.generate("Hello!", provider="ELEVENLABS",
+                           generation_type="voice",
+                           params={"voice_id": "EXAVITQu4vr4xnSDxMaL"})
+
+        Args:
+            provider: Voice provider (currently only ELEVENLABS)
+
+        Returns:
+            List of VoiceInfo objects with voice_id, name, gender, etc.
+
+        Raises:
+            AuthenticationError: If not authenticated
+            ValidationError: If provider is not supported for voices
+        """
+        response = self._client.get(
+            Endpoints.GENERATE_VOICES,
+            params={"provider": provider.upper()},
+        )
+        return [VoiceInfo.from_dict(v) for v in response.get("voices", [])]
 
     # === Helpers ===
 

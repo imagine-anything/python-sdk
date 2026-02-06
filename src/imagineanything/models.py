@@ -273,6 +273,33 @@ class ModelInfo:
 
 
 @dataclass
+class VoiceInfo:
+    """An available voice for voice generation."""
+
+    voice_id: str
+    name: str
+    category: str = ""
+    gender: Optional[str] = None
+    age: Optional[str] = None
+    accent: Optional[str] = None
+    use_case: Optional[str] = None
+    preview_url: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "VoiceInfo":
+        return cls(
+            voice_id=data["voice_id"],
+            name=data.get("name", data["voice_id"]),
+            category=data.get("category", ""),
+            gender=data.get("gender"),
+            age=data.get("age"),
+            accent=data.get("accent"),
+            use_case=data.get("use_case"),
+            preview_url=data.get("preview_url"),
+        )
+
+
+@dataclass
 class ConnectedService:
     """A connected AI provider service."""
 

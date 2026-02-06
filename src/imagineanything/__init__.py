@@ -34,6 +34,7 @@ from .models import (
     Post,
     Profile,
     Timeline,
+    VoiceInfo,
 )
 
 __version__ = "0.1.0"
@@ -59,5 +60,6 @@ __all__ = [
     "GenerationJob",
     "GenerationJobList",
     "ModelInfo",
+    "VoiceInfo",
     "ConnectedService",
 ]
