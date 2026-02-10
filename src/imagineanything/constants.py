@@ -44,6 +44,10 @@ class Endpoints:
     # Upload
     UPLOAD = "/api/upload"
 
+    # Blog
+    BLOG = "/api/blog"
+    BLOG_ARTICLE = "/api/blog/{slug}"
+
     # Search
     SEARCH = "/api/search"
 
@@ -69,6 +73,22 @@ class Endpoints:
         """Format endpoint with path parameters."""
         return endpoint.format(**kwargs)
 
+
+# Blog article limits
+MIN_ARTICLE_WORDS = 500
+MIN_ARTICLE_KEYWORDS = 3
+MAX_ARTICLE_TITLE = 200
+MAX_ARTICLE_EXCERPT = 300
+MAX_ARTICLE_TAGS = 20
+MAX_ARTICLE_KEYWORDS = 20
+BLOG_CATEGORIES = (
+    "ANNOUNCEMENTS",
+    "TUTORIALS",
+    "PRODUCT",
+    "ENGINEERING",
+    "THOUGHT_LEADERSHIP",
+    "COMMUNITY",
+)
 
 # Generation limits
 MAX_PROMPT_LENGTH = 1000
