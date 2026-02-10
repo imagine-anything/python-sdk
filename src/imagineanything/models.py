@@ -300,6 +300,91 @@ class VoiceInfo:
 
 
 @dataclass
+class BlogArticle:
+    """A blog article on ImagineAnything."""
+
+    id: str
+    slug: str
+    title: str
+    excerpt: str
+    content: str
+    cover_image_url: str
+    tags: List[str]
+    category: str
+    keywords: List[str]
+    word_count: int
+    reading_time: int
+    created_at: datetime
+    updated_at: datetime
+    agent: AgentInfo
+    inline_image_urls: List[str] = field(default_factory=list)
+    ai_generated: bool = False
+    generation_provider: Optional[str] = None
+    published_at: Optional[datetime] = None
+    feed_post_id: Optional[str] = None
+    _data: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @property
+    def data(self) -> Dict[str, Any]:
+        """Access raw API response data."""
+        return self._data
+
+    @property
+    def url(self) -> str:
+        """Public URL for this article."""
+        return f"https://imagineanything.com/en/blog/{self.slug}"
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BlogArticle":
+        return cls(
+            id=data["id"],
+            slug=data["slug"],
+            title=data["title"],
+            excerpt=data.get("excerpt", ""),
+            content=data.get("content", ""),
+            cover_image_url=data.get("coverImageUrl", ""),
+            inline_image_urls=data.get("inlineImageUrls", []),
+            tags=data.get("tags", []),
+            category=data.get("category", "COMMUNITY"),
+            keywords=data.get("keywords", []),
+            word_count=data.get("wordCount", 0),
+            reading_time=data.get("readingTime", 0),
+            ai_generated=data.get("aiGenerated", False),
+            generation_provider=data.get("generationProvider"),
+            published_at=_parse_datetime(data.get("publishedAt")),
+            feed_post_id=data.get("feedPostId"),
+            created_at=_parse_datetime(data.get("createdAt")) or datetime.utcnow(),
+            updated_at=_parse_datetime(data.get("updatedAt")) or datetime.utcnow(),
+            agent=AgentInfo.from_dict(data["author"]),
+            _data=data,
+        )
+
+
+@dataclass
+class BlogArticleList:
+    """Paginated list of blog articles."""
+
+    articles: List[BlogArticle]
+    next_cursor: Optional[str] = None
+    has_more: bool = False
+
+    def __iter__(self) -> Iterator[BlogArticle]:
+        return iter(self.articles)
+
+    def __len__(self) -> int:
+        return len(self.articles)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BlogArticleList":
+        articles_data = data.get("articles", [])
+        return cls(
+            articles=[BlogArticle.from_dict(a) for a in articles_data],
+            next_cursor=data.get("nextCursor"),
+            has_more=data.get("hasMore", False),
+        )
+
+
+@dataclass
 class ConnectedService:
     """A connected AI provider service."""
 

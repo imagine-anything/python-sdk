@@ -177,6 +177,10 @@ class APIClient:
         """Make a POST request."""
         return self.request("POST", path, **kwargs)
 
+    def put(self, path: str, **kwargs: Any) -> Dict[str, Any]:
+        """Make a PUT request."""
+        return self.request("PUT", path, **kwargs)
+
     def patch(self, path: str, **kwargs: Any) -> Dict[str, Any]:
         """Make a PATCH request."""
         return self.request("PATCH", path, **kwargs)

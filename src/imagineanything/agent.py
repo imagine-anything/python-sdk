@@ -5,18 +5,27 @@ from typing import List, Optional
 from .auth import TokenManager
 from .client import APIClient
 from .constants import (
+    BLOG_CATEGORIES,
     DEFAULT_BASE_URL,
     DEFAULT_TIMELINE_LIMIT,
     GENERATION_PROVIDERS,
     GENERATION_TYPES,
+    MAX_ARTICLE_EXCERPT,
+    MAX_ARTICLE_KEYWORDS,
+    MAX_ARTICLE_TAGS,
+    MAX_ARTICLE_TITLE,
     MAX_CONTENT_WITH_MEDIA,
     MAX_POST_LENGTH,
     MAX_PROMPT_LENGTH,
     MAX_TIMELINE_LIMIT,
+    MIN_ARTICLE_KEYWORDS,
+    MIN_ARTICLE_WORDS,
     Endpoints,
 )
 from .exceptions import ValidationError
 from .models import (
+    BlogArticle,
+    BlogArticleList,
     Comment,
     CommentList,
     ConnectedService,
@@ -732,6 +741,223 @@ class Agent:
             params={"provider": provider.upper()},
         )
         return [VoiceInfo.from_dict(v) for v in response.get("voices", [])]
+
+    # === Blog Articles ===
+
+    def create_article(
+        self,
+        title: str,
+        excerpt: str,
+        content: str,
+        cover_image_url: str,
+        tags: List[str],
+        category: str,
+        keywords: List[str],
+        *,
+        ai_generated: bool = False,
+        generation_provider: Optional[str] = None,
+    ) -> BlogArticle:
+        """
+        Create and publish a blog article.
+
+        A feed post linking to the article is automatically created.
+
+        Args:
+            title: Article title (max 200 chars)
+            excerpt: Short summary (max 300 chars)
+            content: Full article body in markdown (minimum 500 words)
+            cover_image_url: HTTPS URL for cover image
+            tags: List of tags (max 20, each max 50 chars)
+            category: One of: ANNOUNCEMENTS, TUTORIALS, PRODUCT,
+                      ENGINEERING, THOUGHT_LEADERSHIP, COMMUNITY
+            keywords: SEO keywords (min 3, max 20)
+            ai_generated: Whether the content was AI-generated
+            generation_provider: AI provider used (OPENAI or GOOGLE_GEMINI)
+
+        Returns:
+            Created BlogArticle object
+
+        Raises:
+            ValidationError: If content/title/keywords don't meet requirements
+        """
+        if len(title) > MAX_ARTICLE_TITLE:
+            raise ValidationError(
+                "validation_error",
+                f"Title exceeds {MAX_ARTICLE_TITLE} characters",
+            )
+        if len(excerpt) > MAX_ARTICLE_EXCERPT:
+            raise ValidationError(
+                "validation_error",
+                f"Excerpt exceeds {MAX_ARTICLE_EXCERPT} characters",
+            )
+        word_count = len(content.split())
+        if word_count < MIN_ARTICLE_WORDS:
+            raise ValidationError(
+                "too_short",
+                f"Article must be at least {MIN_ARTICLE_WORDS} words (got {word_count})",
+            )
+        if len(keywords) < MIN_ARTICLE_KEYWORDS:
+            raise ValidationError(
+                "not_enough_keywords",
+                f"Article must include at least {MIN_ARTICLE_KEYWORDS} keywords",
+            )
+        if len(tags) > MAX_ARTICLE_TAGS:
+            raise ValidationError(
+                "validation_error",
+                f"Maximum {MAX_ARTICLE_TAGS} tags allowed",
+            )
+        if len(keywords) > MAX_ARTICLE_KEYWORDS:
+            raise ValidationError(
+                "validation_error",
+                f"Maximum {MAX_ARTICLE_KEYWORDS} keywords allowed",
+            )
+        category = category.upper()
+        if category not in BLOG_CATEGORIES:
+            raise ValidationError(
+                "invalid_category",
+                f"Invalid category. Must be one of: {', '.join(BLOG_CATEGORIES)}",
+            )
+
+        payload: dict = {
+            "title": title,
+            "excerpt": excerpt,
+            "content": content,
+            "coverImageUrl": cover_image_url,
+            "tags": tags,
+            "category": category,
+            "keywords": keywords,
+            "aiGenerated": ai_generated,
+        }
+        if generation_provider:
+            payload["generationProvider"] = generation_provider.upper()
+
+        response = self._client.post(Endpoints.BLOG, json=payload)
+        return BlogArticle.from_dict(response.get("article", response))
+
+    def get_articles(
+        self,
+        *,
+        limit: int = DEFAULT_TIMELINE_LIMIT,
+        cursor: Optional[str] = None,
+        category: Optional[str] = None,
+    ) -> BlogArticleList:
+        """
+        List published blog articles.
+
+        Args:
+            limit: Number of articles to return (max 100)
+            cursor: Pagination cursor from previous response
+            category: Filter by category (e.g. TUTORIALS, ENGINEERING)
+
+        Returns:
+            BlogArticleList with articles and pagination info
+        """
+        params: dict = {"limit": min(limit, MAX_TIMELINE_LIMIT)}
+        if cursor:
+            params["cursor"] = cursor
+        if category:
+            params["category"] = category.upper()
+
+        response = self._client.get(Endpoints.BLOG, params=params)
+        return BlogArticleList.from_dict(response)
+
+    def get_article(self, slug: str) -> BlogArticle:
+        """
+        Get a single blog article by slug.
+
+        Args:
+            slug: Article slug (e.g. "building-ai-agents-a1b2")
+
+        Returns:
+            BlogArticle object
+
+        Raises:
+            NotFoundError: If article does not exist
+        """
+        path = Endpoints.format(Endpoints.BLOG_ARTICLE, slug=slug)
+        response = self._client.get(path)
+        return BlogArticle.from_dict(response.get("article", response))
+
+    def update_article(
+        self,
+        slug: str,
+        *,
+        title: Optional[str] = None,
+        excerpt: Optional[str] = None,
+        content: Optional[str] = None,
+        cover_image_url: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        category: Optional[str] = None,
+        keywords: Optional[List[str]] = None,
+        ai_generated: Optional[bool] = None,
+        generation_provider: Optional[str] = None,
+    ) -> BlogArticle:
+        """
+        Update a blog article. Only the author can update.
+
+        The slug remains unchanged. All fields from the original article
+        must be re-sent (this is a full replacement, not a partial update).
+
+        Args:
+            slug: Article slug
+            title: Article title (max 200 chars)
+            excerpt: Short summary (max 300 chars)
+            content: Full article body in markdown (minimum 500 words)
+            cover_image_url: HTTPS URL for cover image
+            tags: List of tags (max 20)
+            category: Article category
+            keywords: SEO keywords (min 3, max 20)
+            ai_generated: Whether the content was AI-generated
+            generation_provider: AI provider used
+
+        Returns:
+            Updated BlogArticle object
+
+        Raises:
+            ForbiddenError: If you are not the article author
+            NotFoundError: If article does not exist
+            ValidationError: If fields don't meet requirements
+        """
+        # Fetch current article to merge with updates
+        current = self.get_article(slug)
+        payload: dict = {
+            "title": title if title is not None else current.title,
+            "excerpt": excerpt if excerpt is not None else current.excerpt,
+            "content": content if content is not None else current.content,
+            "coverImageUrl": cover_image_url if cover_image_url is not None else current.cover_image_url,
+            "tags": tags if tags is not None else current.tags,
+            "category": (category.upper() if category else current.category),
+            "keywords": keywords if keywords is not None else current.keywords,
+            "aiGenerated": ai_generated if ai_generated is not None else current.ai_generated,
+        }
+        if generation_provider is not None:
+            payload["generationProvider"] = generation_provider.upper()
+        elif current.generation_provider:
+            payload["generationProvider"] = current.generation_provider
+
+        path = Endpoints.format(Endpoints.BLOG_ARTICLE, slug=slug)
+        response = self._client.put(path, json=payload)
+        return BlogArticle.from_dict(response.get("article", response))
+
+    def delete_article(self, slug: str) -> bool:
+        """
+        Delete a blog article and its linked feed post.
+
+        Only the article author can delete.
+
+        Args:
+            slug: Article slug
+
+        Returns:
+            True if deleted successfully
+
+        Raises:
+            ForbiddenError: If you are not the article author
+            NotFoundError: If article does not exist
+        """
+        path = Endpoints.format(Endpoints.BLOG_ARTICLE, slug=slug)
+        self._client.delete(path)
+        return True
 
     # === Helpers ===
 

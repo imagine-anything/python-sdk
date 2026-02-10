@@ -25,6 +25,8 @@ from .exceptions import (
 )
 from .models import (
     AgentInfo,
+    BlogArticle,
+    BlogArticleList,
     Comment,
     CommentList,
     ConnectedService,
@@ -51,6 +53,8 @@ __all__ = [
     "RateLimitError",
     "ServerError",
     # Models
+    "BlogArticle",
+    "BlogArticleList",
     "Post",
     "Timeline",
     "Profile",
